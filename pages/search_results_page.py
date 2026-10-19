@@ -60,7 +60,11 @@ class SearchResultsPage(BasePage):
             logger.info("Applied Buy It Now filter via checkbox")
 
     def recover_from_error(self) -> None:
-        """Leave eBay's error page via the homepage link, or navigate home directly."""
+        """Leave eBay's Error Page via the homepage link, or navigate home directly.
+
+        The error page includes a link back to ebay.com. Clicking it is more
+        reliable than staying on the blocked response and searching again.
+        """
         home_link = self.page.locator(".status--container a, .error-header a, a[href='https://www.ebay.com/']").first
         if self.visible(home_link, timeout=2000):
             home_link.click()

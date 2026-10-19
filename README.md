@@ -48,6 +48,16 @@ allure serve allure-results
 
 Screenshots from each added item and the cart are stored in `reports/screenshots/` and attached to Allure. JUnit XML is written to `reports/junit.xml`.
 
+An example of a finished run is checked in at [`run-report.html`](run-report.html) in the repository root. Open that file in a browser. It is a single HTML report (statuses, steps, text attachments, and compressed screenshots) and does not include the raw Allure output.
+
+`allure-results/` and `allure-report/` are gitignored, so those folders stay out of the repo. To refresh the example after a new pytest run:
+
+```bash
+python scripts/build_run_report.py
+```
+
+That overwrites `run-report.html` in the repository root. Commit that file on its own.
+
 ## Docker
 
 The image includes Playwright browsers, xvfb (so Chromium can run “headed” without a real display), and the Allure CLI. Start Docker Desktop first.
@@ -108,8 +118,8 @@ allure open allure-report
 ## Architecture
 
 ```
-config/          Environment-driven settings
-data/            JSON scenarios (query, max price, limit, auth mode)
+config/          Environment-driven settings (see Configuration)
+data/            External scenario JSON (see Scenarios)
 pages/           Page Object Model (home, search, item, cart, sign-in)
 services/        Business flows composed from page objects
 utils/           Price parser, reporting, URL helpers, data loader
@@ -123,7 +133,57 @@ tests/           Pytest + Allure
 3. `add_items_to_cart(urls)` — open each item, pick random available variants, click Add to cart, screenshot
 4. `assert_cart_total_not_exceeds(budget_per_item, items_count)` — read the cart item subtotal and assert it is `<= budget_per_item * items_count`
 
-Change search data in `data/test_data.json` without touching test code.
+## Configuration
+
+Runtime settings come from the environment. `config/settings.py` loads `.env` from the repo root (via `python-dotenv`) and exposes them through `get_settings()`. Copy `.env.example` to `.env` and edit that file for local runs. A variable already set in the process (Docker Compose, CI, or the shell) takes precedence over `.env`.
+
+| Variable | Default | What it controls |
+| --- | --- | --- |
+| `EBAY_BASE_URL` | `https://www.ebay.com` | Site the suite opens |
+| `EBAY_AUTH_MODE` | `guest` | Default for `authenticate()` when no mode is passed. The e2e test passes the scenario's `auth_mode` instead (see Scenarios) |
+| `EBAY_EMAIL` / `EBAY_PASSWORD` | empty | Credentials for `login` mode |
+| `HEADLESS` | `false` | Headed Chromium by default. `true` / `1` / `yes` / `on` turn headless on |
+| `SLOW_MO_MS` | `0` | Playwright slow-motion delay, in milliseconds |
+| `TIMEOUT_MS` | `45000` | Default page and navigation timeout |
+| `BROWSER_CHANNEL` | empty | Set to `chrome` to drive the installed Google Chrome instead of Playwright's Chromium |
+| `RANDOM_SEED` | empty | Seed for variant picks (size, color). Empty means a new random sequence each run |
+| `MAX_SEARCH_PAGES` | `8` | How many search-result pages to walk while collecting listings |
+
+`conftest.py` applies those settings to the browser: viewport 1440×900, locale `en-US`, the timeout above, headless/slow-motion, and the optional Chrome channel. In Docker or CI it also adds `--no-sandbox` and `--disable-gpu`.
+
+`pytest.ini` is the runner config: tests live under `tests/`, markers are `e2e` (live ebay.com) and `unit` (offline), Allure results go to `allure-results/`, failure screenshots and traces are kept, and JUnit XML is written to `reports/junit.xml`.
+
+Screenshots land in `reports/screenshots/` and traces in `reports/traces/`. Those folders are created when settings load.
+
+## Scenarios
+
+`data/test_data.json` is an external scenario injector. The e2e test does not hardcode the search. At collection time `utils/data_loader.py` (`load_test_scenarios`) reads the `scenarios` array, and `tests/test_ebay_shopping_flow.py` parametrizes one test per object. The pytest node id is the scenario `id` (or the query if `id` is omitted).
+
+Add, remove, or edit objects in that file to change what runs. The Python test stays the same. Docker mounts `./data` read-only into the container, so the host file is what the container executes.
+
+```json
+{
+  "scenarios": [
+    {
+      "id": "shoes_under_220",
+      "query": "shoes",
+      "max_price": 220,
+      "limit": 5,
+      "auth_mode": "guest"
+    }
+  ]
+}
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | no | Name shown in pytest and Allure. Falls back to `query` |
+| `query` | yes | Text typed into eBay search |
+| `max_price` | yes | Numeric cap. Applied to the price the site displays, in the site currency, with no conversion |
+| `limit` | no | How many listing URLs to collect. Default `5` |
+| `auth_mode` | no | `guest` (default) or `login`. `login` also needs `EBAY_EMAIL` and `EBAY_PASSWORD` in the config above |
+
+The file must contain a non-empty `scenarios` list. Pytest fails at collection if the list is missing or empty.
 
 ## Limitations / assumptions
 

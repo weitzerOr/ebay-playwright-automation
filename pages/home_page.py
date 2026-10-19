@@ -22,6 +22,7 @@ class HomePage(BasePage):
     def open(self) -> None:
         """Open ebay.com and reload once if the error page appears."""
         self.goto(self.settings.base_url)
+        # Same eBay "Error Page" as BasePage.is_error_page; one reload often clears it.
         if "Error Page" in (self.page.title() or ""):
             self.page.reload(wait_until="domcontentloaded")
             self.dismiss_overlays()

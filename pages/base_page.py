@@ -81,7 +81,13 @@ class BasePage:
         return False
 
     def is_error_page(self) -> bool:
-        """Detect eBay's generic 'Error Page' response."""
+        """Detect eBay's generic 'Error Page' response.
+
+        eBay serves this page (document title contains "Error Page") when it
+        blocks the client — headless Chrome, a datacenter IP, or a rejected
+        filter submit — instead of the real site. Callers reload, go back, or
+        follow the homepage link to leave it.
+        """
         return "error page" in (self.page.title() or "").lower()
 
     def wait_for_network_idle(self, timeout: int = 8000) -> None:
