@@ -26,6 +26,8 @@ def test_search_add_to_cart_total_within_budget(
     limit = int(scenario.get("limit", 5))
     auth_mode = str(scenario.get("auth_mode", "guest"))
 
+    # Show each scenario field on its own in the Allure report.
+    # Pytest already passes the whole scenario dict; these do not change the test.
     allure.dynamic.parameter("query", query)
     allure.dynamic.parameter("max_price", max_price)
     allure.dynamic.parameter("limit", limit)
