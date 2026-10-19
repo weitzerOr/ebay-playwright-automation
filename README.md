@@ -35,10 +35,17 @@ That runs the full suite, then opens the HTML report in a browser.
 Useful pytest variants:
 
 ```bash
-pytest -m unit --alluredir=allure-results          # offline price-parser tests
 pytest -m e2e --alluredir=allure-results           # live ebay.com flow
+pytest -n 2 -m e2e                                 # a couple of live browsers at once
+pytest --video=off                                 # skip the flow recording
 HEADLESS=true pytest --alluredir=allure-results    # headless (often blocked by eBay)
 ```
+
+Every test in `tests/` is an end-to-end run against ebay.com.
+
+Parallel workers come from [pytest-xdist](https://pytest-xdist.readthedocs.io/). `-n 2` starts two workers. Each worker has its own browser, so tests must stay independent (they already get a fresh `page`). Live eBay often blocks many browsers from one machine; keep parallelism low.
+
+Each test records a `.webm` of the flow and attaches it to that test in Allure. Recording is on by default (`--video=on` in `pytest.ini`). `--video=off` disables it for that run.
 
 Serve the report without generating a static folder:
 
@@ -68,7 +75,7 @@ docker compose build
 docker compose run --rm tests
 ```
 
-That runs the full pytest suite (unit + live eBay e2e). Results are written to the host:
+That runs the live eBay suite. Results are written to the host:
 
 - `allure-results/` — raw Allure data
 - `reports/` — screenshots and JUnit XML
@@ -77,8 +84,9 @@ That runs the full pytest suite (unit + live eBay e2e). Results are written to t
 Useful variants:
 
 ```bash
-docker compose run --rm tests pytest -m unit
 docker compose run --rm tests pytest -m e2e
+docker compose run --rm tests pytest -n 2 -m e2e
+docker compose run --rm tests pytest --video=off
 HEADLESS=true docker compose run --rm tests
 ```
 
@@ -105,8 +113,7 @@ Raw Allure results are written to `allure-results/`. Screenshots from each added
 
 `.github/workflows/tests.yml` runs on push to `main`, pull requests, and manual **Run workflow**.
 
-- **Unit tests** — required. Offline price-parser tests.
-- **eBay e2e** — live site against GitHub-hosted runners. Marked `continue-on-error` because eBay often blocks datacenter IPs. Allure results and screenshots are uploaded as artifacts either way.
+- **eBay e2e** — the whole suite, against the live site on GitHub-hosted runners. Marked `continue-on-error` because eBay often blocks datacenter IPs. Allure results and screenshots are uploaded as artifacts either way.
 
 Download the `e2e-allure-results` artifact from the workflow run, then locally:
 
@@ -116,6 +123,8 @@ allure open allure-report
 ```
 
 ## Architecture
+
+A detailed write-up of the layers, the run sequence, and where a change belongs is in [`docs/architecture.pdf`](docs/architecture.pdf).
 
 ```
 config/          Environment-driven settings (see Configuration)
@@ -151,7 +160,7 @@ Runtime settings come from the environment. `config/settings.py` loads `.env` fr
 
 `conftest.py` applies those settings to the browser: viewport 1440×900, locale `en-US`, the timeout above, headless/slow-motion, and the optional Chrome channel. In Docker or CI it also adds `--no-sandbox` and `--disable-gpu`.
 
-`pytest.ini` is the runner config: tests live under `tests/`, markers are `e2e` (live ebay.com) and `unit` (offline), Allure results go to `allure-results/`, failure screenshots and traces are kept, and JUnit XML is written to `reports/junit.xml`.
+`pytest.ini` is the runner config: tests live under `tests/`, every test is marked `e2e` (live ebay.com), Allure results go to `allure-results/`, flow video is recorded (`--video=on`), failure screenshots and traces are kept, and JUnit XML is written to `reports/junit.xml`. Pass `--video=off` to skip recording. Pass `-n 2` to run a couple of browsers in parallel.
 
 Screenshots land in `reports/screenshots/` and traces in `reports/traces/`. Those folders are created when settings load.
 
@@ -184,6 +193,10 @@ Add, remove, or edit objects in that file to change what runs. The Python test s
 | `auth_mode` | no | `guest` (default) or `login`. `login` also needs `EBAY_EMAIL` and `EBAY_PASSWORD` in the config above |
 
 The file must contain a non-empty `scenarios` list. Pytest fails at collection if the list is missing or empty.
+
+## Adding tests
+
+How to add a test is in [`.claude/skills/add-ebay-tests/SKILL.md`](.claude/skills/add-ebay-tests/SKILL.md). Cursor and Claude Code both load that one file. Another search or budget is a new object in `data/test_data.json`. New page behavior goes on a page object, then a thin test. The skill also says to enable the Playwright MCP before writing locators.
 
 ## Limitations / assumptions
 

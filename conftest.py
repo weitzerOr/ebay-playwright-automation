@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, Generator
 
 import allure
@@ -74,10 +75,27 @@ def ebay_shop(page: Page) -> EbayShopService:
     return EbayShopService(page)
 
 
+def _attach_flow_videos(item: pytest.Item, report: pytest.TestReport) -> None:
+    """Attach the Playwright .webm once the context has closed and the file exists."""
+    root = Path(str(item.config.invocation_params.dir))
+    for key, raw in getattr(report, "user_properties", []):
+        if key != "playwright_video":
+            continue
+        path = Path(str(raw))
+        if not path.is_file():
+            path = root / path
+        if path.is_file():
+            allure.attach.file(str(path), name="recording", attachment_type=allure.attachment_type.WEBM)
+
+
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) -> Generator[None, None, None]:
     outcome = yield
     report = outcome.get_result()
+    # Video is finalized during teardown, after pytest-playwright saves it.
+    if report.when == "teardown":
+        _attach_flow_videos(item, report)
+        return
     if report.when != "call" or not report.failed:
         return
     page = item.funcargs.get("page")

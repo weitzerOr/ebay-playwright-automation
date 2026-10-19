@@ -35,7 +35,6 @@ class HomePage(BasePage):
         search_box.click(force=True)
         search_box.fill(query)
         logger.info("Searching for %r", query)
-        self.dismiss_overlays()
         try:
             if not self.click_first_visible(self.SEARCH_BUTTON.split(", "), timeout=2000):
                 search_box.press("Enter")
