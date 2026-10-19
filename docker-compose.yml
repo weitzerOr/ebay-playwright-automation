@@ -1,0 +1,41 @@
+services:
+  tests:
+    build: .
+    image: ebay-playwright-automation
+    shm_size: "2gb"
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RUNNING_IN_DOCKER: "1"
+      HEADLESS: ${HEADLESS:-false}
+      BROWSER_CHANNEL: ""
+      EBAY_BASE_URL: ${EBAY_BASE_URL:-https://www.ebay.com}
+      EBAY_AUTH_MODE: ${EBAY_AUTH_MODE:-guest}
+      MAX_SEARCH_PAGES: ${MAX_SEARCH_PAGES:-8}
+    volumes:
+      - ./allure-results:/app/allure-results
+      - ./allure-report:/app/allure-report
+      - ./reports:/app/reports
+      - ./data:/app/data:ro
+    command: ["pytest"]
+
+  allure:
+    image: ebay-playwright-automation
+    build: .
+    entrypoint: ["allure"]
+    command: ["generate", "/app/allure-results", "-o", "/app/allure-report", "--clean"]
+    volumes:
+      - ./allure-results:/app/allure-results
+      - ./allure-report:/app/allure-report
+
+  allure-ui:
+    image: ebay-playwright-automation
+    build: .
+    entrypoint: ["allure"]
+    command: ["serve", "/app/allure-results", "--host", "0.0.0.0", "--port", "5050"]
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./allure-results:/app/allure-results
